@@ -31,13 +31,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# API Key authentication (optional)
+# API Key authentication (required for security)
 API_KEY = os.environ.get("MCP_API_KEY")  # Set in Railway environment variables
+
+# Log warning if API key is not set (for production security)
+if not API_KEY:
+    logger.warning("⚠️  MCP_API_KEY not set! The server will accept all requests without authentication.")
+    logger.warning("⚠️  For production deployment, please set MCP_API_KEY environment variable.")
 
 
 def verify_api_key(request: Request) -> bool:
-    """Verify API key from request headers"""
-    # If no API key is set, allow all requests (backward compatible)
+    """Verify API key from request headers.
+    
+    Supports two header formats:
+    1. Authorization: Bearer <api_key>
+    2. X-API-Key: <api_key>
+    
+    Returns:
+        bool: True if API key is valid or not required, False otherwise
+    """
+    # If no API key is set, allow all requests (backward compatible, but not recommended for production)
     if not API_KEY:
         return True
     
@@ -54,9 +67,24 @@ def verify_api_key(request: Request) -> bool:
         token = api_key_header.strip()
     
     if not token:
+        logger.warning("API key authentication failed: No API key provided in request headers")
         return False
     
-    return token == API_KEY
+    # Use constant-time comparison to prevent timing attacks
+    if len(token) != len(API_KEY):
+        logger.warning("API key authentication failed: Invalid API key length")
+        return False
+    
+    # Constant-time comparison
+    result = 0
+    for x, y in zip(token.encode(), API_KEY.encode()):
+        result |= x ^ y
+    
+    is_valid = result == 0
+    if not is_valid:
+        logger.warning("API key authentication failed: Invalid API key")
+    
+    return is_valid
 
 
 @app.get("/")
@@ -246,11 +274,31 @@ async def mcp_endpoint(request: Request):
 
 
 @app.get("/tools")
-async def list_tools_endpoint():
-    """List all available tools"""
+async def list_tools_endpoint(request: Request):
+    """List all available tools (requires API key if configured)"""
+    # Verify API key if configured
+    if API_KEY and not verify_api_key(request):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Invalid or missing API key"
+        )
+    
     tools = get_tool_definitions()
     return {
         "tools": [tool.model_dump() for tool in tools]
+    }
+
+
+@app.get("/debug/api-key")
+async def debug_api_key():
+    """Debug endpoint to check if API_KEY is loaded (remove in production if needed)
+    
+    This endpoint shows whether API key is configured but does not reveal the key itself.
+    """
+    return {
+        "api_key_configured": bool(API_KEY),
+        "api_key_length": len(API_KEY) if API_KEY else 0,
+        "message": "API key is configured" if API_KEY else "⚠️  API key is NOT configured - server is open to all requests"
     }
 
 
