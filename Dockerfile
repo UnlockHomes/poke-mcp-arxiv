@@ -33,5 +33,13 @@ COPY --from=uv --chown=app:app /app/.venv /app/.venv
 # Set the PATH to include the virtual environment
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Set default to HTTP mode for cloud deployment
+ENV MCP_TRANSPORT=http
+ENV PORT=8000
+ENV HOST=0.0.0.0
+
+# Expose the port
+EXPOSE 8000
+
 # Set the default entrypoint
 ENTRYPOINT ["python", "-m", "arxiv_mcp_server"]
