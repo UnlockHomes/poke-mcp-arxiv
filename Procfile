@@ -1,2 +1,2 @@
-web: MCP_TRANSPORT=http PYTHONPATH=/app/src:$PYTHONPATH python -m arxiv_mcp_server
+web: python http_server.py
 

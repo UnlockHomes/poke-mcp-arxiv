@@ -17,6 +17,3 @@ fastapi>=0.104.0
 anyio>=4.2.0
 black>=25.1.0
 
-# Install the project itself in editable mode
--e .
-
